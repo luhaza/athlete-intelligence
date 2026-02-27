@@ -1,17 +1,22 @@
 """Training load (strain) algorithm.
 
 This module quantifies the physiological stress imposed by a single
-activity.  Two complementary methods are implemented so that a score
+activity.  Three complementary methods are implemented so that a score
 can always be produced regardless of which sensors were used:
 
 1. **TRIMP** (Training Impulse) – heart-rate–based; preferred when HR
    data is available.  Based on Banister (1991) with the monotonic HR
    ratio used by Morton et al. (1990).
 
-2. **Duration × Intensity Score (DIS)** – fallback when HR is absent.
-   Combines moving time, distance, and elevation to estimate effort.
+2. **Power-based Score** – used when reliable power data is available.
+   Uses ``average_watts`` as a direct proxy for mechanical work (cycling /
+   other power-meter sports).
 
-Both methods return a dimensionless score on the same relative scale so
+3. **Duration × Intensity Score (DIS)** – fallback when HR and power are
+   absent.  Combines moving time, distance, and elevation to estimate
+   effort.
+
+All methods return a dimensionless score on the same relative scale so
 that activities can be ranked and compared.
 
 Key metrics
@@ -174,7 +179,8 @@ def _trimp_score(metrics: ActivityMetrics) -> float:
 
     trimp = duration_min * hr_ratio * 0.64 * math.exp(1.92 * hr_ratio)
 
-    # Apply elevation bonus: +2% per 10 m of gain per km of distance.
+    # Apply elevation bonus: ~+1% per 10 m of gain per km (~1% per 1% avg
+    # gradient), capped at 20%.
     trimp *= _elevation_factor(metrics)
 
     # Apply sport-specific scaling.
@@ -205,6 +211,7 @@ def _power_score(metrics: ActivityMetrics) -> float:
     intensity_factor = min(metrics.average_watts / REFERENCE_POWER, 2.0)
     score = duration_hours * (intensity_factor ** 2) * 100.0
     score *= _elevation_factor(metrics)
+    score *= _sport_factor(metrics.sport_type)
     return round(score, 2)
 
 

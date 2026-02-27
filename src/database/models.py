@@ -45,8 +45,8 @@ class Athlete(Base):
     # Heart-rate thresholds used for training-load calculations
     resting_heart_rate = Column(Integer, nullable=True)   # bpm
     max_heart_rate = Column(Integer, nullable=True)       # bpm
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     def __repr__(self) -> str:
         return f"<Athlete strava_id={self.strava_athlete_id} name={self.firstname} {self.lastname}>"
@@ -131,8 +131,8 @@ class Activity(Base):
     training_load = Column(Float, nullable=True)
 
     # --- Housekeeping ---
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     def __repr__(self) -> str:
         return (

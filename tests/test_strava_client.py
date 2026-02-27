@@ -22,6 +22,12 @@ def client():
 def test_client_init_with_explicit_token():
     c = StravaClient(access_token="explicit_token")
     assert c._session.headers["Authorization"] == "Bearer explicit_token"
+    assert c._timeout == 10.0
+
+
+def test_client_init_custom_timeout():
+    c = StravaClient(access_token="tok", timeout=30.0)
+    assert c._timeout == 30.0
 
 
 def test_client_init_from_env(monkeypatch):
@@ -49,7 +55,7 @@ def test_get_athlete(client):
     with patch.object(client._session, "get", return_value=mock_resp) as mock_get:
         result = client.get_athlete()
 
-    mock_get.assert_called_once_with(f"{STRAVA_API_BASE}/athlete", params={})
+    mock_get.assert_called_once_with(f"{STRAVA_API_BASE}/athlete", params={}, timeout=10.0)
     assert result == athlete_data
 
 
@@ -69,6 +75,7 @@ def test_get_activities_default_pagination(client):
     mock_get.assert_called_once_with(
         f"{STRAVA_API_BASE}/athlete/activities",
         params={"page": 1, "per_page": 30},
+        timeout=10.0,
     )
     assert result == activities
 
@@ -84,6 +91,7 @@ def test_get_activities_custom_pagination(client):
     mock_get.assert_called_once_with(
         f"{STRAVA_API_BASE}/athlete/activities",
         params={"page": 3, "per_page": 50},
+        timeout=10.0,
     )
 
 
@@ -100,7 +108,7 @@ def test_get_activity(client):
     with patch.object(client._session, "get", return_value=mock_resp) as mock_get:
         result = client.get_activity(99)
 
-    mock_get.assert_called_once_with(f"{STRAVA_API_BASE}/activities/99", params={})
+    mock_get.assert_called_once_with(f"{STRAVA_API_BASE}/activities/99", params={}, timeout=10.0)
     assert result == activity
 
 

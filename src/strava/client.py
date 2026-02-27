@@ -21,15 +21,18 @@ class StravaClient:
     access_token:
         A valid Strava OAuth access token. When omitted the value is read
         from the ``STRAVA_ACCESS_TOKEN`` environment variable.
+    timeout:
+        Timeout in seconds for all HTTP requests. Defaults to 10 seconds.
     """
 
-    def __init__(self, access_token: str | None = None) -> None:
+    def __init__(self, access_token: str | None = None, timeout: float = 10.0) -> None:
         token = access_token or os.environ.get("STRAVA_ACCESS_TOKEN")
         if not token:
             raise ValueError(
                 "A Strava access token must be provided either as an argument "
                 "or via the STRAVA_ACCESS_TOKEN environment variable."
             )
+        self._timeout = timeout
         self._session = requests.Session()
         self._session.headers.update({"Authorization": f"Bearer {token}"})
 
@@ -40,7 +43,7 @@ class StravaClient:
     def _get(self, path: str, **params: Any) -> Any:
         """Perform an authenticated GET request and return parsed JSON."""
         url = f"{STRAVA_API_BASE}/{path.lstrip('/')}"
-        response = self._session.get(url, params=params)
+        response = self._session.get(url, params=params, timeout=self._timeout)
         response.raise_for_status()
         return response.json()
 

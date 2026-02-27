@@ -33,20 +33,26 @@ pip install -r requirements.txt
 cp .env.example .env          # then add your STRAVA_ACCESS_TOKEN
 ```
 
+`python-dotenv` is included in the dependencies. Import `src.config` (or call
+`dotenv.load_dotenv()`) at the start of your script so that variables in `.env`
+are loaded into the process environment before constructing any client or engine.
+
 ## 1 — Strava API (`src/strava/client.py`)
 
 `StravaClient` wraps the Strava v3 REST API using an existing OAuth access
 token (no OAuth flow required):
 
 ```python
+import src.config  # loads .env into os.environ
 from src.strava.client import StravaClient
 
 client = StravaClient(access_token="<your_token>")  # or set STRAVA_ACCESS_TOKEN
 
-athlete  = client.get_athlete()
-acts     = client.get_activities(per_page=50)
-detail   = client.get_activity(activity_id)
-streams  = client.get_activity_streams(activity_id, ["heartrate", "time"])
+athlete      = client.get_athlete()
+acts         = client.get_activities(per_page=50)
+activity_id  = acts[0]["id"]  # example: use the ID of the most recent activity
+detail       = client.get_activity(activity_id)
+streams      = client.get_activity_streams(activity_id, ["heartrate", "time"])
 ```
 
 ## 2 — Database schema (`src/database/models.py`)
