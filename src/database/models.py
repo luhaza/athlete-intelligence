@@ -19,13 +19,14 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
     UniqueConstraint,
     create_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy.orm import DeclarativeBase, Session, relationship
 
 
 class Base(DeclarativeBase):
@@ -134,11 +135,113 @@ class Activity(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
+    # --- Relationships ---
+    streams = relationship("ActivityStream", back_populates="activity", cascade="all, delete-orphan")
+    laps = relationship("ActivityLap", back_populates="activity", cascade="all, delete-orphan")
+
     def __repr__(self) -> str:
         return (
             f"<Activity id={self.strava_activity_id} sport={self.sport_type} "
             f"date={self.start_date_local} load={self.training_load}>"
         )
+
+
+class ActivityStream(Base):
+    """Time-series data streams for an activity (heart rate, pace, power, etc.).
+    
+    Strava provides streams as arrays of values sampled at regular intervals.
+    Each stream type (heartrate, watts, cadence, etc.) is stored as a separate row.
+    The 'data' column stores the array as a JSON string for simplicity.
+    
+    For more efficient querying, consider using PostgreSQL's ARRAY type or
+    storing each data point as a separate row.
+    """
+
+    __tablename__ = "activity_streams"
+    __table_args__ = (
+        UniqueConstraint("strava_activity_id", "stream_type", name="uq_activity_stream"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strava_activity_id = Column(Integer, ForeignKey("activities.strava_activity_id"), nullable=False, index=True)
+    
+    # Stream type: "time", "distance", "latlng", "altitude", "velocity_smooth",
+    # "heartrate", "cadence", "watts", "temp", "moving", "grade_smooth"
+    stream_type = Column(String(50), nullable=False)
+    
+    # Array of data points stored as JSON string: "[120, 125, 130, ...]"
+    # For heartrate this would be BPM values, for distance it would be meters, etc.
+    data = Column(Text, nullable=False)
+    
+    # Number of data points
+    original_size = Column(Integer, nullable=True)
+    
+    # Resolution of the stream (e.g., "low", "medium", "high")
+    resolution = Column(String(20), nullable=True)
+    
+    # Whether the data was returned in its original form or resampled
+    series_type = Column(String(20), nullable=True)  # "distance" or "time"
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # --- Relationships ---
+    activity = relationship("Activity", back_populates="streams")
+
+    def __repr__(self) -> str:
+        return f"<ActivityStream activity_id={self.strava_activity_id} type={self.stream_type}>"
+
+
+class ActivityLap(Base):
+    """Represents a lap within an activity (for interval workouts, splits, etc.).
+    
+    Laps are useful for analyzing interval training, race splits, or
+    manually marked segments during an activity.
+    """
+
+    __tablename__ = "activity_laps"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strava_activity_id = Column(Integer, ForeignKey("activities.strava_activity_id"), nullable=False, index=True)
+    
+    # Lap metadata
+    lap_index = Column(Integer, nullable=False)  # 1-indexed lap number
+    name = Column(String(255), nullable=True)
+    
+    # Timing
+    elapsed_time = Column(Integer, nullable=False)  # seconds
+    moving_time = Column(Integer, nullable=False)   # seconds
+    start_date = Column(DateTime, nullable=False)
+    start_date_local = Column(DateTime, nullable=False)
+    
+    # Distance & elevation
+    distance = Column(Float, nullable=False)  # meters
+    total_elevation_gain = Column(Float, nullable=True)
+    
+    # Speed
+    average_speed = Column(Float, nullable=True)  # m/s
+    max_speed = Column(Float, nullable=True)      # m/s
+    
+    # Heart rate
+    average_heartrate = Column(Float, nullable=True)  # bpm
+    max_heartrate = Column(Float, nullable=True)      # bpm
+    
+    # Cadence
+    average_cadence = Column(Float, nullable=True)
+    
+    # Power (cycling)
+    average_watts = Column(Float, nullable=True)
+    
+    # Lap type indicator
+    # 1 = manual, 2 = auto (distance-based), 3 = session, etc.
+    lap_type = Column(Integer, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # --- Relationships ---
+    activity = relationship("Activity", back_populates="laps")
+
+    def __repr__(self) -> str:
+        return f"<ActivityLap activity_id={self.strava_activity_id} lap={self.lap_index} distance={self.distance}m>"
 
 
 # ---------------------------------------------------------------------------

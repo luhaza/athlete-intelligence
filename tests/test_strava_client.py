@@ -128,7 +128,13 @@ def test_refresh_access_token_success(client_with_refresh):
     assert client_with_refresh._session.headers["Authorization"] == "Bearer new_access_token"
 
 
-def test_refresh_access_token_without_refresh_token(client):
+def test_refresh_access_token_without_refresh_token(monkeypatch):
+    # Ensure no environment variables are set
+    monkeypatch.delenv("STRAVA_REFRESH_TOKEN", raising=False)
+    
+    # Create client after clearing env vars
+    client = StravaClient(access_token="test_token")
+    
     with pytest.raises(ValueError, match="refresh_token is not set"):
         client._refresh_access_token()
 
