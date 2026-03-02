@@ -32,3 +32,6 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+
+# other
+plans.md
