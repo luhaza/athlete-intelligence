@@ -101,8 +101,6 @@ class StravaClient:
         response.raise_for_status()
         data = response.json()
         
-        print(f"DEBUG: Refresh response: {data}")
-        
         # Update tokens and expiration
         self._access_token = data["access_token"]
         self._refresh_token = data["refresh_token"]
@@ -110,8 +108,6 @@ class StravaClient:
         
         # Update session authorization header
         self._session.headers.update({"Authorization": f"Bearer {self._access_token}"})
-        
-        print(f"Token refreshed. New token expires at {self._expires_at}")
 
     def _ensure_valid_token(self) -> None:
         """Check if token is expired and refresh if necessary."""
@@ -121,25 +117,18 @@ class StravaClient:
         
         # Refresh if token expires in less than 5 minutes
         if time.time() >= (self._expires_at - 300):
-            print("Access token expired or expiring soon, refreshing...")
             self._refresh_access_token()
 
     def _get(self, path: str, **params: Any) -> Any:
         """Perform an authenticated GET request and return parsed JSON."""
         self._ensure_valid_token()
         url = f"{STRAVA_API_BASE}/{path.lstrip('/')}"
-        
-        print(f"DEBUG: Making request to {url}")
-        print(f"DEBUG: Authorization header: {self._session.headers.get('Authorization')}")
-        
         response = self._session.get(url, params=params, timeout=self._timeout)
         
         # If we get a 401, the token might be invalid even if not expired
         # Try refreshing once and retry
         if response.status_code == 401 and self._refresh_token:
-            print("Received 401 Unauthorized, attempting token refresh...")
             self._refresh_access_token()
-            print(f"DEBUG: After refresh, Authorization header: {self._session.headers.get('Authorization')}")
             # Retry the request with new token
             response = self._session.get(url, params=params, timeout=self._timeout)
         
