@@ -190,3 +190,17 @@ class StravaClient:
             keys=keys,
             key_by_type="true",  # Strava expects lowercase string, not Python bool
         )
+
+    def get_activity_laps(self, activity_id: int) -> list[dict[str, Any]]:
+        """Return lap data for an activity.
+
+        Parameters
+        ----------
+        activity_id:
+            The numeric Strava activity identifier.
+
+        Returns
+        -------
+        List of lap dictionaries containing lap metrics (distance, time, pace, etc.)
+        """
+        return self._get(f"/activities/{activity_id}/laps")
