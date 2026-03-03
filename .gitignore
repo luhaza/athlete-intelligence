@@ -24,6 +24,7 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
 # Environment files
 .env
@@ -34,6 +35,6 @@ htmlcov/
 *.swp
 
 # other
-plans.md
+PLAN.md
 POSTGRESQL_MIGRATION.md
 SYNC_README.md
