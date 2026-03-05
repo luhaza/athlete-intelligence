@@ -36,5 +36,4 @@ htmlcov/
 
 # other
 PLAN.md
-POSTGRESQL_MIGRATION.md
-SYNC_README.md
+docs/*
