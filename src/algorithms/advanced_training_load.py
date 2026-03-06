@@ -49,21 +49,20 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from ..config.training_zones import (
+    get_hr_zones,
+    get_athlete_thresholds,
+    DEFAULT_MAX_HR,
+    DEFAULT_RESTING_HR,
+    DEFAULT_THRESHOLD_HR_PERCENT,
+)
 
-# HR Zone definitions: (lower %, upper %, exponential weight)
-# Based on % of max heart rate
-HR_ZONES = {
-    1: (0.50, 0.60, 1.0),   # Recovery: minimal stress
-    2: (0.60, 0.70, 1.2),   # Easy aerobic base building
-    3: (0.70, 0.80, 1.5),   # Tempo: moderate stress
-    4: (0.80, 0.90, 2.2),   # Threshold: high stress, lactate production
-    5: (0.90, 1.00, 3.5),   # VO2max: severe stress, significant recovery needed
-}
 
-# Default physiological thresholds
-DEFAULT_RESTING_HR = 60
-DEFAULT_MAX_HR = 190
-DEFAULT_THRESHOLD_HR_PERCENT = 0.88  # ~88% of max HR
+# For backward compatibility - these now come from config
+# Use get_hr_zones() to get zones (supports per-athlete zones in Phase 8)
+DEFAULT_RESTING_HR = DEFAULT_RESTING_HR
+DEFAULT_MAX_HR = DEFAULT_MAX_HR
+DEFAULT_THRESHOLD_HR_PERCENT = DEFAULT_THRESHOLD_HR_PERCENT
 
 
 @dataclass
@@ -140,6 +139,7 @@ def calculate_advanced_training_load(
     max_hr: int = DEFAULT_MAX_HR,
     resting_hr: int = DEFAULT_RESTING_HR,
     threshold_hr_percent: float = DEFAULT_THRESHOLD_HR_PERCENT,
+    athlete_id: Optional[int] = None,
 ) -> AdvancedLoadResult:
     """Calculate sophisticated training load using stream data.
     
@@ -175,6 +175,9 @@ def calculate_advanced_training_load(
     if not streams.heartrate or len(streams.heartrate) == 0:
         raise ValueError("Heartrate stream is required and cannot be empty")
     
+    # Get HR zones (supports per-athlete zones in Phase 8)
+    hr_zones = get_hr_zones(athlete_id)
+    
     threshold_hr = int(max_hr * threshold_hr_percent)
     
     # Component 1: Base instantaneous TRIMP
@@ -183,7 +186,7 @@ def calculate_advanced_training_load(
     )
     
     # Component 2: Zone-weighted load
-    zone_data = _calculate_time_in_zones(streams.heartrate, max_hr)
+    zone_data = _calculate_time_in_zones(streams.heartrate, max_hr, hr_zones)
     zone_weighted_load = zone_data['zone_weighted_load']
     time_in_zones = zone_data['time_in_zones']
     zone_percentages = zone_data['zone_percentages']
@@ -267,6 +270,7 @@ def _calculate_instantaneous_trimp(
 def _calculate_time_in_zones(
     heartrate_stream: list[int],
     max_hr: int,
+    hr_zones: Optional[dict] = None,
 ) -> dict:
     """Calculate time spent in each HR zone with exponential weighting.
     
@@ -280,21 +284,25 @@ def _calculate_time_in_zones(
         zone_weighted_load : float
             Load score weighted by zone intensity
     """
+    # Use provided zones or get defaults
+    if hr_zones is None:
+        hr_zones = get_hr_zones()
+    
     time_in_zones = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     
     for hr in heartrate_stream:
         hr_percent = hr / max_hr
         
         # Find which zone this HR falls into
-        for zone, (lower, upper, _) in HR_ZONES.items():
+        for zone, (lower, upper, _) in hr_zones.items():
             if lower <= hr_percent < upper:
                 time_in_zones[zone] += 1  # 1 second
                 break
         else:
             # HR above zone 5 upper bound or below zone 1 lower bound
-            if hr_percent >= HR_ZONES[5][1]:
+            if hr_percent >= hr_zones[5][1]:
                 time_in_zones[5] += 1
-            elif hr_percent < HR_ZONES[1][0]:
+            elif hr_percent < hr_zones[1][0]:
                 time_in_zones[1] += 1
     
     # Calculate percentages
@@ -307,7 +315,7 @@ def _calculate_time_in_zones(
     # Calculate weighted load
     zone_weighted_load = 0.0
     for zone, seconds in time_in_zones.items():
-        weight = HR_ZONES[zone][2]
+        weight = hr_zones[zone][2]
         zone_weighted_load += (seconds / 60.0) * weight  # minutes × weight
     
     return {

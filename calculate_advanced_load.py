@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 # Add src/ to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import Session
@@ -38,9 +38,8 @@ from src.algorithms.advanced_training_load import (
     calculate_advanced_training_load,
     StreamData,
     result_to_dict,
-    DEFAULT_MAX_HR,
-    DEFAULT_RESTING_HR,
 )
+from src.config.training_zones import get_athlete_thresholds
 
 
 def get_stream_data(session: Session, activity: Activity) -> StreamData:
@@ -74,7 +73,7 @@ def get_stream_data(session: Session, activity: Activity) -> StreamData:
             data = json.loads(stream.data) if isinstance(stream.data, str) else stream.data
             stream_dict[stream.stream_type] = data
         except (json.JSONDecodeError, TypeError) as e:
-            print(f"  ⚠️  Warning: Failed to parse {stream.stream_type} stream: {e}")
+            print(f"Warning: Failed to parse {stream.stream_type} stream: {e}")
             continue
     
     # Heartrate is required
@@ -193,13 +192,15 @@ def main():
     # Get athlete HR thresholds
     athlete = session.query(Athlete).first()
     if athlete:
-        max_hr = athlete.max_heart_rate or DEFAULT_MAX_HR
-        resting_hr = athlete.resting_heart_rate or DEFAULT_RESTING_HR
-        print(f"👤 Using athlete HR: max={max_hr} bpm, resting={resting_hr} bpm")
+        thresholds = get_athlete_thresholds(
+            athlete_id=athlete.id,
+            max_hr=athlete.max_heart_rate,
+            resting_hr=athlete.resting_heart_rate,
+        )
+        print(f"👤 Using athlete HR: max={thresholds.max_hr} bpm, resting={thresholds.resting_hr} bpm")
     else:
-        max_hr = DEFAULT_MAX_HR
-        resting_hr = DEFAULT_RESTING_HR
-        print(f"⚠️  No athlete found, using defaults: max={max_hr} bpm, resting={resting_hr} bpm")
+        thresholds = get_athlete_thresholds()
+        print(f"⚠️  No athlete found, using defaults: max={thresholds.max_hr} bpm, resting={thresholds.resting_hr} bpm")
     
     # Build query
     if args.activity_id:
@@ -243,8 +244,8 @@ def main():
         result = calculate_for_activity(
             session,
             activity,
-            max_hr,
-            resting_hr,
+            thresholds.max_hr,
+            thresholds.resting_hr,
             dry_run=args.dry_run,
         )
         
