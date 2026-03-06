@@ -27,7 +27,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Session, relationship
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -172,9 +172,9 @@ class ActivityStream(Base):
     # "heartrate", "cadence", "watts", "temp", "moving", "grade_smooth"
     stream_type = Column(String(50), nullable=False)
     
-    # Array of data points stored as JSON string: "[120, 125, 130, ...]"
+    # Array of data points stored as a JSON list: [120, 125, 130, ...]
     # For heartrate this would be BPM values, for distance it would be meters, etc.
-    data = Column(Text, nullable=False)
+    data = Column(JSON, nullable=False)
     
     # Number of data points
     original_size = Column(Integer, nullable=True)
@@ -264,6 +264,3 @@ def engine_from_url(database_url: str | None = None):
     return create_engine(url)
 
 
-def get_session(engine) -> Session:
-    """Return a new SQLAlchemy :class:`Session` bound to *engine*."""
-    return Session(bind=engine)

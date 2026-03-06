@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from src.api.dependencies import get_db
-from src.api.schemas import AthleteResponse
+from src.api.schemas import AthleteResponse, AthleteStatsResponse
 from src.database.models import Athlete, Activity
 
 
@@ -27,7 +27,7 @@ async def get_athlete_profile(db: Session = Depends(get_db)):
     return AthleteResponse.model_validate(athlete)
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=AthleteStatsResponse)
 async def get_athlete_stats(db: Session = Depends(get_db)):
     """Get aggregate statistics for the athlete.
     
@@ -58,7 +58,7 @@ async def get_athlete_stats(db: Session = Depends(get_db)):
     
     return {
         "athlete_id": athlete.strava_athlete_id,
-        "full_name": f"{athlete.firstname} {athlete.lastname}",
+        "full_name": " ".join(filter(None, [athlete.firstname, athlete.lastname])) or athlete.username or "Unknown",
         "total_activities": stats.total_activities or 0,
         "total_distance_miles": (stats.total_distance * 0.000621371) if stats.total_distance else 0,
         "total_distance_km": (stats.total_distance / 1000) if stats.total_distance else 0,

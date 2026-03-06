@@ -12,8 +12,12 @@ from src.strava.client import StravaClient, STRAVA_API_BASE
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client():
-    """Create a basic client with just an access token."""
+def client(monkeypatch):
+    """Create a basic client with just an access token, isolated from env vars."""
+    monkeypatch.delenv("STRAVA_EXPIRES_AT", raising=False)
+    monkeypatch.delenv("STRAVA_REFRESH_TOKEN", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_SECRET", raising=False)
     return StravaClient(access_token="test_token_123")
 
 

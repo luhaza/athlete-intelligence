@@ -191,6 +191,18 @@ class LapSummary(BaseModel):
         from_attributes = True
 
 
+class AthleteStatsResponse(BaseModel):
+    """Aggregate statistics for an athlete."""
+    athlete_id: int
+    full_name: str
+    total_activities: int
+    total_distance_miles: float
+    total_distance_km: float
+    total_moving_time_hours: float
+    total_elevation_gain_feet: float
+    activities_by_sport: Dict[str, int]
+
+
 class AdvancedTrainingLoadResponse(BaseModel):
     """Detailed training load breakdown for an activity."""
     activity_id: int

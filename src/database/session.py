@@ -40,28 +40,33 @@ def get_engine():
     return _engine
 
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False)
+# Session factory — created once and reused (thread-safe after first call).
+_session_factory = None
+
+
+def _get_session_factory():
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return _session_factory
 
 
 @contextmanager
 def get_session() -> Generator[Session, None, None]:
     """Get a database session with automatic cleanup.
-    
+
     This is a context manager that ensures the session is properly
     closed after use, even if an exception occurs.
-    
+
     Yields:
         SQLAlchemy Session instance.
-        
+
     Example:
         with get_session() as session:
             athlete = session.query(Athlete).first()
             print(athlete.firstname)
     """
-    engine = get_engine()
-    SessionLocal.configure(bind=engine)
-    session = SessionLocal()
+    session = _get_session_factory()()
     try:
         yield session
         session.commit()
@@ -74,13 +79,13 @@ def get_session() -> Generator[Session, None, None]:
 
 def get_raw_session() -> Session:
     """Get a raw database session without context manager.
-    
+
     WARNING: You must manually close this session when done!
     Prefer using get_session() context manager instead.
-    
+
     Returns:
         SQLAlchemy Session instance.
-        
+
     Example:
         session = get_raw_session()
         try:
@@ -88,6 +93,4 @@ def get_raw_session() -> Session:
         finally:
             session.close()
     """
-    engine = get_engine()
-    SessionLocal.configure(bind=engine)
-    return SessionLocal()
+    return _get_session_factory()()

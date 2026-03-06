@@ -181,17 +181,16 @@ def test_training_load_can_be_set(engine, sample_activity):
 def test_activity_stream_insert_and_query(engine, sample_activity):
     """Test creating and querying activity streams."""
     from sqlalchemy.orm import Session
-    import json
 
     with Session(engine) as session:
         session.add(sample_activity)
         session.commit()
 
-        # Add heartrate stream
+        # Add heartrate stream — data is a native Python list (JSON column)
         hr_stream = ActivityStream(
             strava_activity_id=111222333,
             stream_type="heartrate",
-            data=json.dumps([120, 125, 130, 135, 140, 145, 150]),
+            data=[120, 125, 130, 135, 140, 145, 150],
             original_size=7,
             resolution="high",
             series_type="time"
@@ -199,35 +198,33 @@ def test_activity_stream_insert_and_query(engine, sample_activity):
         session.add(hr_stream)
         session.commit()
 
-        # Query the stream
+        # Query the stream — data comes back as a Python list, no json.loads needed
         fetched = session.query(ActivityStream).filter_by(
             strava_activity_id=111222333,
             stream_type="heartrate"
         ).one()
-        
+
         assert fetched.stream_type == "heartrate"
-        data = json.loads(fetched.data)
-        assert data == [120, 125, 130, 135, 140, 145, 150]
+        assert fetched.data == [120, 125, 130, 135, 140, 145, 150]
 
 
 def test_activity_stream_relationship(engine, sample_activity):
     """Test that activity-stream relationship works."""
     from sqlalchemy.orm import Session
-    import json
 
     with Session(engine) as session:
         session.add(sample_activity)
-        
+
         # Add multiple streams
         hr_stream = ActivityStream(
             strava_activity_id=111222333,
             stream_type="heartrate",
-            data=json.dumps([120, 130, 140])
+            data=[120, 130, 140]
         )
         distance_stream = ActivityStream(
             strava_activity_id=111222333,
             stream_type="distance",
-            data=json.dumps([0, 100, 200])
+            data=[0, 100, 200]
         )
         
         session.add_all([hr_stream, distance_stream])
@@ -243,15 +240,14 @@ def test_activity_stream_relationship(engine, sample_activity):
 def test_activity_stream_cascade_delete(engine, sample_activity):
     """Test that deleting an activity also deletes its streams."""
     from sqlalchemy.orm import Session
-    import json
 
     with Session(engine) as session:
         session.add(sample_activity)
-        
+
         hr_stream = ActivityStream(
             strava_activity_id=111222333,
             stream_type="heartrate",
-            data=json.dumps([120, 130, 140])
+            data=[120, 130, 140]
         )
         session.add(hr_stream)
         session.commit()

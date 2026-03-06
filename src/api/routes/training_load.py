@@ -46,7 +46,13 @@ def get_activity_training_load(activity_id: int, db: Session = Depends(get_db)):
             status_code=404,
             detail="Advanced training load not available. Activity may not have stream data or has not been processed yet."
         )
-    
+
+    if activity.advanced_load is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Advanced training load score not yet calculated for this activity."
+        )
+
     return AdvancedTrainingLoadResponse(
         activity_id=activity.strava_activity_id,
         activity_name=activity.name,
@@ -113,7 +119,7 @@ def compare_training_load_methods(activity_id: int, db: Session = Depends(get_db
         interpretation=interpretation,
         
         # Context for interpretation
-        has_intervals=activity.zone_distribution.get('variability_factor', 1.0) > 1.1,
-        has_elevation=activity.zone_distribution.get('elevation_stress', 0) > 5.0,
-        has_anaerobic_efforts=activity.zone_distribution.get('anaerobic_load', 0) > 5.0,
+        has_intervals=(activity.zone_distribution or {}).get('variability_factor', 1.0) > 1.1,
+        has_elevation=(activity.zone_distribution or {}).get('elevation_stress', 0) > 5.0,
+        has_anaerobic_efforts=(activity.zone_distribution or {}).get('anaerobic_load', 0) > 5.0,
     )

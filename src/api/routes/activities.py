@@ -4,7 +4,6 @@ from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-import json
 
 from src.api.dependencies import get_db
 from src.api.schemas import (
@@ -101,7 +100,14 @@ async def get_activity_streams(
         types: Optional comma-separated list of stream types
                (e.g., 'heartrate,pace,altitude')
     """
-    # Build streams query (no need to verify activity exists separately)
+    # Verify activity exists before querying streams
+    activity = db.query(Activity).filter(
+        Activity.strava_activity_id == activity_id
+    ).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    # Build streams query
     query = db.query(ActivityStream).filter(
         ActivityStream.strava_activity_id == activity_id
     )
@@ -119,9 +125,9 @@ async def get_activity_streams(
         query = query.filter(ActivityStream.stream_type.in_(stream_types))
     
     streams = query.all()
-    
+
     if not streams:
-        raise HTTPException(status_code=404, detail="No streams found for this activity")
+        return ActivityStreamsResponse(activity_id=activity_id, streams={})
     
     # Convert to response format with error handling
     import logging
@@ -130,16 +136,14 @@ async def get_activity_streams(
     streams_dict = {}
     for stream in streams:
         try:
-            data = json.loads(stream.data)
             streams_dict[stream.stream_type] = StreamData(
-                data=data,
-                length=len(data),
+                data=stream.data,
+                length=len(stream.data),
                 resolution=stream.resolution,
                 series_type=stream.series_type
             )
-        except json.JSONDecodeError as e:
-            # Log error but don't expose details to client
-            logger.error(f"Error parsing stream {stream.stream_type} for activity {activity_id}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error reading stream {stream.stream_type} for activity {activity_id}: {str(e)}")
             continue
     
     if not streams_dict:
