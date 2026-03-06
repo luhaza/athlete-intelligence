@@ -33,8 +33,8 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import Session
 
-from database.models import Activity, ActivityStream, Athlete
-from algorithms.advanced_training_load import (
+from src.database.models import Activity, ActivityStream, Athlete
+from src.algorithms.advanced_training_load import (
     calculate_advanced_training_load,
     StreamData,
     result_to_dict,
