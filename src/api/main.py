@@ -8,7 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from src.api.routes import activities, athlete
+from src.api.routes import activities, athlete, training_load
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +57,7 @@ async def add_security_headers(request, call_next):
 # Include routers
 app.include_router(activities.router, prefix="/activities", tags=["Activities"])
 app.include_router(athlete.router, prefix="/athlete", tags=["Athlete"])
+app.include_router(training_load.router, prefix="/activities", tags=["Training Load"])
 
 
 @app.get("/", tags=["Health"])

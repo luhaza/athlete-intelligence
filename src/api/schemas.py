@@ -189,3 +189,51 @@ class LapSummary(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class AdvancedTrainingLoadResponse(BaseModel):
+    """Detailed training load breakdown for an activity."""
+    activity_id: int
+    activity_name: str
+    sport_type: str
+    start_date: datetime
+    
+    # Legacy metric
+    legacy_trimp: Optional[float] = Field(None, description="Aggregate-based TRIMP score")
+    
+    # Advanced metrics
+    advanced_load: float = Field(description="Total advanced training load score")
+    base_trimp: float = Field(description="Instantaneous TRIMP from HR stream")
+    zone_weighted_load: float = Field(description="Time-in-zones weighted score")
+    variability_factor: float = Field(description="HR variability multiplier (1.0-1.5)")
+    anaerobic_load: float = Field(description="Extra load from time above threshold")
+    elevation_stress: float = Field(description="Load contribution from climbing")
+    efficiency_penalty: float = Field(description="Fatigue/decoupling penalty")
+    
+    # Zone distribution
+    time_in_zones: Dict[int, int] = Field(description="Seconds in each HR zone (1-5)")
+    zone_percentages: Dict[int, float] = Field(description="Percentage in each zone")
+    
+    class Config:
+        from_attributes = True
+
+
+class TrainingLoadComparison(BaseModel):
+    """Comparison between legacy and advanced training load methods."""
+    activity_id: int
+    activity_name: str
+    
+    # Scores
+    legacy_trimp: float = Field(description="Aggregate-based TRIMP")
+    advanced_load: float = Field(description="Stream-based advanced load")
+    difference: float = Field(description="Advanced - Legacy")
+    percent_difference: float = Field(description="Percentage difference")
+    
+    # Interpretation
+    interpretation: str = Field(description="What the difference means")
+    has_intervals: bool = Field(description="Detected interval workout")
+    has_elevation: bool = Field(description="Significant climbing detected")
+    has_anaerobic_efforts: bool = Field(description="Time spent above threshold")
+    
+    class Config:
+        from_attributes = True

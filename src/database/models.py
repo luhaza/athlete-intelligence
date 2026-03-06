@@ -21,6 +21,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -128,8 +129,10 @@ class Activity(Base):
     manual = Column(Boolean, default=False, nullable=False)
     private = Column(Boolean, default=False, nullable=False)
 
-    # --- Derived metric (populated by training_load.py) ---
-    training_load = Column(Float, nullable=True)
+    # --- Derived metrics (populated by algorithms) ---
+    training_load = Column(Float, nullable=True)              # Legacy aggregate-based TRIMP
+    advanced_load = Column(Float, nullable=True)              # Stream-based advanced training load
+    zone_distribution = Column(JSON, nullable=True)           # Time in each HR zone (dict)
 
     # --- Housekeeping ---
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
