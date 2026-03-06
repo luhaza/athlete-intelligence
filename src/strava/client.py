@@ -143,7 +143,13 @@ class StravaClient:
         """Return the authenticated athlete's profile."""
         return self._get("/athlete")
 
-    def get_activities(self, page: int = 1, per_page: int = 30) -> list[dict[str, Any]]:
+    def get_activities(
+        self,
+        page: int = 1,
+        per_page: int = 30,
+        before: int | None = None,
+        after: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Return a list of the athlete's recent activities.
 
         Parameters
@@ -152,10 +158,21 @@ class StravaClient:
             Page number (1-indexed).
         per_page:
             Number of activities per page (max 200).
+        before:
+            Unix timestamp — return only activities started before this time.
+            Useful for incremental sync.
+        after:
+            Unix timestamp — return only activities started after this time.
+            Useful for incremental sync.
         """
         if per_page > 200:
             raise ValueError("per_page cannot exceed 200 (Strava API limit).")
-        return self._get("/athlete/activities", page=page, per_page=per_page)
+        params: dict[str, Any] = {"page": page, "per_page": per_page}
+        if before is not None:
+            params["before"] = before
+        if after is not None:
+            params["after"] = after
+        return self._get("/athlete/activities", **params)
 
     def get_activity(self, activity_id: int) -> dict[str, Any]:
         """Return detailed information for a single activity.

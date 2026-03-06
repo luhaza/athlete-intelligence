@@ -2,13 +2,14 @@
 
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from src.api.routes import activities, athlete, training_load
+from src.api.dependencies import verify_api_key
 
 # Load environment variables
 load_dotenv()
@@ -54,10 +55,11 @@ async def add_security_headers(request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-# Include routers
-app.include_router(activities.router, prefix="/activities", tags=["Activities"])
-app.include_router(athlete.router, prefix="/athlete", tags=["Athlete"])
-app.include_router(training_load.router, prefix="/activities", tags=["Training Load"])
+# Include routers — all business routes require API key authentication
+_auth = [Depends(verify_api_key)]
+app.include_router(activities.router, prefix="/activities", tags=["Activities"], dependencies=_auth)
+app.include_router(athlete.router, prefix="/athlete", tags=["Athlete"], dependencies=_auth)
+app.include_router(training_load.router, prefix="/activities", tags=["Training Load"], dependencies=_auth)
 
 
 @app.get("/", tags=["Health"])
