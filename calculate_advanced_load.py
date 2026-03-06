@@ -151,7 +151,7 @@ def calculate_for_activity(
         return result_to_dict(result)
         
     except ValueError as e:
-        print(f"  ⚠️  Skipping {activity.name}: {e}")
+        print(f"   Skipping {activity.name}: {e}")
         return None
     except Exception as e:
         print(f"  ❌ Error processing {activity.name}: {e}")
@@ -200,7 +200,7 @@ def main():
         print(f"👤 Using athlete HR: max={thresholds.max_hr} bpm, resting={thresholds.resting_hr} bpm")
     else:
         thresholds = get_athlete_thresholds()
-        print(f"⚠️  No athlete found, using defaults: max={thresholds.max_hr} bpm, resting={thresholds.resting_hr} bpm")
+        print(f" No athlete found, using defaults: max={thresholds.max_hr} bpm, resting={thresholds.resting_hr} bpm")
     
     # Build query
     if args.activity_id:
@@ -260,7 +260,7 @@ def main():
     print("=" * 60)
     print(f"✓ Completed: {success_count} activities calculated")
     if skip_count > 0:
-        print(f"⚠️  Skipped: {skip_count} activities (no heartrate stream)")
+        print(f" Skipped: {skip_count} activities (no heartrate stream)")
     if args.dry_run:
         print(f"🔍 Dry run mode - no changes saved to database")
     

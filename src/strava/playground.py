@@ -20,7 +20,7 @@ try:
 except requests.exceptions.HTTPError as e:
     if e.response.status_code == 401:
         error_data = e.response.json()
-        print(f"\n⚠️  Authorization Error: {error_data}")
+        print(f"\n Authorization Error: {error_data}")
         print("\nYour access token is missing the 'activity:read_all' scope.")
         print("Please re-authorize with the proper scopes to read activities.")
     else:

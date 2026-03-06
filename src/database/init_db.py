@@ -36,7 +36,7 @@ def init_database(echo: bool = True) -> bool:
         print("Database type: SQLite (development)")
         db_path = database_url.replace('sqlite:///', '')
         if Path(db_path).exists():
-            print(f"⚠️  Database file already exists: {db_path}")
+            print(f" Database file already exists: {db_path}")
             response = input("Do you want to recreate it? This will DELETE all data! (yes/no): ")
             if response.lower() != 'yes':
                 print("Aborted.")
@@ -45,10 +45,10 @@ def init_database(echo: bool = True) -> bool:
             print(f"Deleted existing database: {db_path}")
     elif is_postgresql():
         print("Database type: PostgreSQL (production)")
-        print("⚠️  Make sure the database exists before running this script.")
+        print(" Make sure the database exists before running this script.")
         print("    You may need to run: createdb athlete_intelligence")
     else:
-        print(f"⚠️  Unknown database type: {database_url}")
+        print(f" Unknown database type: {database_url}")
         print("    Supported types: sqlite://, postgresql://")
     
     try:
@@ -74,7 +74,7 @@ def init_database(echo: bool = True) -> bool:
         expected_tables = {'athletes', 'activities', 'activity_streams', 'activity_laps'}
         missing_tables = expected_tables - set(tables)
         if missing_tables:
-            print(f"\n⚠️  Warning: Missing expected tables: {missing_tables}")
+            print(f"\n Warning: Missing expected tables: {missing_tables}")
             return False
         
         print("\n✅ Database initialized successfully!")

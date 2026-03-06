@@ -74,7 +74,7 @@ def test_get_activities(strava_client):
         for act in activities[:3]:  # Show first 3
             print(f"  - {act['name']} ({act['type']})")
     else:
-        print("\n⚠️  No activities found for this athlete")
+        print("\n No activities found for this athlete")
 
 
 def test_get_activities_pagination(strava_client):
