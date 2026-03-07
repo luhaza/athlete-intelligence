@@ -230,6 +230,50 @@ class AdvancedTrainingLoadResponse(BaseModel):
         from_attributes = True
 
 
+class AthleteUpdateRequest(BaseModel):
+    """Request body for PATCH /athlete."""
+    max_heart_rate: Optional[int] = Field(None, ge=100, le=250, description="Max heart rate in bpm")
+    resting_heart_rate: Optional[int] = Field(None, ge=30, le=100, description="Resting heart rate in bpm")
+
+
+class PerformanceDaySnapshot(BaseModel):
+    """PMC metrics for a single day."""
+    date: str           # ISO date string YYYY-MM-DD
+    daily_load: float
+    ctl: float          # Chronic Training Load (fitness)
+    atl: float          # Acute Training Load (fatigue)
+    tsb: float          # Training Stress Balance (form)
+
+
+class PerformanceResponse(BaseModel):
+    """Response for GET /athlete/performance."""
+    start_date: str
+    end_date: str
+    series: List[PerformanceDaySnapshot]
+    current_ctl: float
+    current_atl: float
+    current_tsb: float
+    trend: str          # 'improving', 'declining', or 'stable'
+
+
+class LoadPeriodSummary(BaseModel):
+    """Load summary for a single week or month."""
+    period_label: str           # e.g. "2024-W22" or "2024-06"
+    start_date: str             # ISO date YYYY-MM-DD
+    end_date: str               # ISO date YYYY-MM-DD
+    total_load: float
+    total_distance_km: float
+    total_moving_time_hours: float
+    total_activities: int
+    activities_by_sport: Dict[str, int]
+
+
+class LoadSummaryResponse(BaseModel):
+    """Response for GET /athlete/load/summary."""
+    period: str                         # 'weekly' or 'monthly'
+    periods: List[LoadPeriodSummary]
+
+
 class TrainingLoadComparison(BaseModel):
     """Comparison between legacy and advanced training load methods."""
     activity_id: int

@@ -322,3 +322,219 @@ class TestTrainingLoadEndpoints:
         assert data["advanced_load"] == pytest.approx(110.2)
         assert data["difference"] == pytest.approx(34.7, abs=0.1)
         assert data["has_intervals"] is True
+
+
+# ---------------------------------------------------------------------------
+# PATCH /athlete
+# ---------------------------------------------------------------------------
+
+class TestPatchAthlete:
+    def test_patch_max_hr(self, client, sample_athlete):
+        r = client.patch("/athlete", json={"max_heart_rate": 185})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["max_heart_rate"] == 185
+        # resting_heart_rate unchanged
+        assert data["resting_heart_rate"] == 55
+
+    def test_patch_resting_hr(self, client, sample_athlete):
+        r = client.patch("/athlete", json={"resting_heart_rate": 50})
+        assert r.status_code == 200
+        assert r.json()["resting_heart_rate"] == 50
+
+    def test_patch_both_fields(self, client, sample_athlete):
+        r = client.patch("/athlete", json={"max_heart_rate": 190, "resting_heart_rate": 55})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["max_heart_rate"] == 190
+        assert data["resting_heart_rate"] == 55
+
+    def test_patch_no_fields_is_noop(self, client, sample_athlete):
+        r = client.patch("/athlete", json={})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["max_heart_rate"] == 185
+        assert data["resting_heart_rate"] == 55
+
+    def test_patch_max_hr_out_of_range(self, client, sample_athlete):
+        r = client.patch("/athlete", json={"max_heart_rate": 50})  # below ge=100
+        assert r.status_code == 422
+
+    def test_patch_resting_hr_out_of_range(self, client, sample_athlete):
+        r = client.patch("/athlete", json={"resting_heart_rate": 10})  # below ge=30
+        assert r.status_code == 422
+
+    def test_patch_no_athlete(self, client):
+        r = client.patch("/athlete", json={"max_heart_rate": 185})
+        assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /athlete/performance
+# ---------------------------------------------------------------------------
+
+class TestPerformanceEndpoint:
+    def test_no_athlete_returns_404(self, client):
+        r = client.get("/athlete/performance")
+        assert r.status_code == 404
+
+    def test_no_activities_returns_zeros(self, client, sample_athlete):
+        r = client.get("/athlete/performance?start=2024-01-01&end=2024-01-07")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["current_ctl"] == 0.0
+        assert data["current_atl"] == 0.0
+        assert data["current_tsb"] == 0.0
+        assert data["trend"] == "stable"
+        assert len(data["series"]) == 7
+
+    def test_series_length_matches_range(self, client, sample_athlete):
+        r = client.get("/athlete/performance?start=2024-03-01&end=2024-03-31")
+        assert r.status_code == 200
+        assert len(r.json()["series"]) == 31
+
+    def test_activity_load_appears_in_series(self, client, sample_athlete, test_session):
+        # Add activity with known load on a specific date
+        act = Activity(
+            strava_activity_id=77777,
+            strava_athlete_id=12345,
+            name="Test Run",
+            sport_type="Run",
+            start_date=datetime(2024, 6, 10, 7, 0, 0),
+            start_date_local=datetime(2024, 6, 10, 7, 0, 0),
+            elapsed_time=3600,
+            moving_time=3600,
+            distance=10000.0,
+            training_load=100.0,
+            trainer=False,
+            commute=False,
+            manual=False,
+            private=False,
+        )
+        test_session.add(act)
+        test_session.commit()
+
+        r = client.get("/athlete/performance?start=2024-06-10&end=2024-06-10")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["series"]) == 1
+        assert data["series"][0]["daily_load"] == pytest.approx(100.0)
+        assert data["series"][0]["ctl"] > 0.0
+        assert data["series"][0]["atl"] > 0.0
+
+    def test_invalid_date_format(self, client, sample_athlete):
+        r = client.get("/athlete/performance?start=06-01-2024")
+        assert r.status_code == 422
+
+    def test_start_after_end_returns_422(self, client, sample_athlete):
+        r = client.get("/athlete/performance?start=2024-06-10&end=2024-06-01")
+        assert r.status_code == 422
+
+    def test_response_fields_present(self, client, sample_athlete):
+        r = client.get("/athlete/performance?start=2024-01-01&end=2024-01-01")
+        assert r.status_code == 200
+        data = r.json()
+        assert "start_date" in data
+        assert "end_date" in data
+        assert "current_ctl" in data
+        assert "current_atl" in data
+        assert "current_tsb" in data
+        assert "trend" in data
+        assert "series" in data
+        day = data["series"][0]
+        assert set(day.keys()) == {"date", "daily_load", "ctl", "atl", "tsb"}
+
+
+# ---------------------------------------------------------------------------
+# GET /athlete/load/summary
+# ---------------------------------------------------------------------------
+
+class TestLoadSummaryEndpoint:
+    def test_no_athlete_returns_404(self, client):
+        r = client.get("/athlete/load/summary")
+        assert r.status_code == 404
+
+    def test_weekly_default(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["period"] == "weekly"
+        assert len(data["periods"]) == 8  # default weeks=8
+
+    def test_monthly_mode(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=monthly&months=3")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["period"] == "monthly"
+        assert len(data["periods"]) == 3
+
+    def test_weekly_custom_count(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=weekly&weeks=4")
+        assert r.status_code == 200
+        assert len(r.json()["periods"]) == 4
+
+    def test_period_labels_weekly(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=weekly&weeks=2")
+        assert r.status_code == 200
+        for period in r.json()["periods"]:
+            assert "-W" in period["period_label"]
+
+    def test_period_labels_monthly(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=monthly&months=2")
+        assert r.status_code == 200
+        for period in r.json()["periods"]:
+            # format: YYYY-MM
+            label = period["period_label"]
+            assert len(label) == 7
+            assert label[4] == "-"
+
+    def test_activity_counted_in_correct_period(self, client, sample_athlete, test_session):
+        from datetime import date
+        # Use the current month so it always falls within any reasonable window
+        today = date.today()
+        act_date = datetime(today.year, today.month, 1, 7, 0, 0)
+        expected_label = f"{today.year}-{today.month:02d}"
+
+        act = Activity(
+            strava_activity_id=66666,
+            strava_athlete_id=12345,
+            name="A Run",
+            sport_type="Run",
+            start_date=act_date,
+            start_date_local=act_date,
+            elapsed_time=3600,
+            moving_time=3600,
+            distance=10000.0,
+            training_load=80.0,
+            trainer=False,
+            commute=False,
+            manual=False,
+            private=False,
+        )
+        test_session.add(act)
+        test_session.commit()
+
+        r = client.get("/athlete/load/summary?period=monthly&months=3")
+        assert r.status_code == 200
+        target_period = next(
+            (p for p in r.json()["periods"] if p["period_label"] == expected_label), None
+        )
+        assert target_period is not None
+        assert target_period["total_activities"] == 1
+        assert target_period["total_load"] == pytest.approx(80.0)
+        assert target_period["total_distance_km"] == pytest.approx(10.0)
+        assert target_period["activities_by_sport"]["Run"] == 1
+
+    def test_invalid_period_returns_422(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=daily")
+        assert r.status_code == 422
+
+    def test_period_summary_fields_present(self, client, sample_athlete):
+        r = client.get("/athlete/load/summary?period=weekly&weeks=1")
+        assert r.status_code == 200
+        p = r.json()["periods"][0]
+        assert set(p.keys()) == {
+            "period_label", "start_date", "end_date",
+            "total_load", "total_distance_km", "total_moving_time_hours",
+            "total_activities", "activities_by_sport",
+        }
