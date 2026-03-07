@@ -234,9 +234,8 @@ class ActivityLap(Base):
     # Power (cycling)
     average_watts = Column(Float, nullable=True)
     
-    # Lap type indicator
-    # 1 = manual, 2 = auto (distance-based), 3 = session, etc.
-    lap_type = Column(Integer, nullable=True)
+    # Lap trigger type as returned by Strava (e.g. "manual", "distance", "lap_button")
+    lap_type = Column(String(50), nullable=True)
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
