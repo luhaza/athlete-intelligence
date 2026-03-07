@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from sqlalchemy.exc import IntegrityError
@@ -34,6 +34,7 @@ from src.algorithms.training_load import calculate_training_load, ActivityMetric
 from src.algorithms.advanced_training_load import (
     calculate_advanced_training_load,
     StreamData,
+    result_to_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,7 +192,7 @@ def _ensure_athlete(
             # Normalise to naive UTC for comparison regardless of DB driver behaviour
             if updated.tzinfo is not None:
                 updated = updated.replace(tzinfo=None)
-            if (datetime.utcnow() - updated).total_seconds() < _ATHLETE_REFRESH_SECS:
+            if (datetime.now(timezone.utc).replace(tzinfo=None) - updated).total_seconds() < _ATHLETE_REFRESH_SECS:
                 return athlete
 
     # Fetch from Strava (new athlete or stale profile)
@@ -414,7 +415,7 @@ def _calculate_load(
 
     try:
         result = calculate_advanced_training_load(streams, max_hr=max_hr, resting_hr=resting_hr)
-        return training_load, result.total_load, result.time_in_zones
+        return training_load, result.total_load, result_to_dict(result)
     except ValueError as exc:
         logger.warning(
             "Advanced load calculation failed for activity %s: %s",
