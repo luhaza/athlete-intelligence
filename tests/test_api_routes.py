@@ -368,6 +368,13 @@ class TestPatchAthlete:
         r = client.patch("/athlete", json={"max_heart_rate": 185})
         assert r.status_code == 404
 
+    def test_recalculate_loads_with_explicit_bind(self, test_engine, test_session, sample_athlete, sample_activity):
+        from src.api.routes import athlete as athlete_routes
+
+        athlete_routes._recalculate_loads(sample_athlete.strava_athlete_id, test_engine)
+        test_session.refresh(sample_activity)
+        assert sample_activity.training_load is not None
+
 
 # ---------------------------------------------------------------------------
 # GET /athlete/performance

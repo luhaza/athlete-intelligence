@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from src.api.dependencies import get_db
 from src.api.schemas import (
@@ -91,14 +91,8 @@ def _recalculate_loads(strava_athlete_id: int, bind=None) -> None:
             _recalculate_loads_for_session(session, strava_athlete_id)
         return
 
-    session = sessionmaker(autocommit=False, autoflush=False, bind=bind)()
-    try:
+    with Session(bind=bind, autoflush=False) as session:
         _recalculate_loads_for_session(session, strava_athlete_id)
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
 
 
 @router.patch("", response_model=AthleteResponse)
