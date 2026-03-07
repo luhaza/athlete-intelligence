@@ -17,7 +17,7 @@ from src.api.schemas import (
     PerformanceDaySnapshot,
     PerformanceResponse,
 )
-from src.algorithms.performance import calculate_pmc, compute_trend
+from src.algorithms.performance import calculate_pmc, compute_trend, seed_pmc
 from src.database.models import Activity, Athlete
 
 
@@ -41,8 +41,15 @@ async def get_athlete_profile(db: Session = Depends(get_db)):
 # PATCH /athlete
 # ---------------------------------------------------------------------------
 
+_RECALC_BATCH_SIZE = 100
+
+
 def _recalculate_loads(strava_athlete_id: int) -> None:
-    """Re-run training load calculations for all activities after HR config changes."""
+    """Re-run training load calculations for all activities after HR config changes.
+
+    Processes activities in batches of ``_RECALC_BATCH_SIZE`` and commits after
+    each batch so the session never holds the entire history in memory.
+    """
     from src.database.session import get_session
     from src.algorithms.training_load import calculate_training_load, ActivityMetrics
     from src.config.training_zones import DEFAULT_MAX_HR, DEFAULT_RESTING_HR
@@ -55,11 +62,16 @@ def _recalculate_loads(strava_athlete_id: int) -> None:
         max_hr = athlete.max_heart_rate or DEFAULT_MAX_HR
         resting_hr = athlete.resting_heart_rate or DEFAULT_RESTING_HR
 
-        activities = session.query(Activity).filter_by(strava_athlete_id=strava_athlete_id).all()
-        for activity in activities:
+        query = (
+            session.query(Activity)
+            .filter_by(strava_athlete_id=strava_athlete_id)
+            .yield_per(_RECALC_BATCH_SIZE)
+        )
+        for i, activity in enumerate(query, 1):
             metrics = ActivityMetrics(
                 sport_type=activity.sport_type,
                 moving_time=activity.moving_time,
+                distance=activity.distance or 0.0,
                 average_heartrate=activity.average_heartrate,
                 average_watts=activity.average_watts,
                 total_elevation_gain=activity.total_elevation_gain,
@@ -67,7 +79,9 @@ def _recalculate_loads(strava_athlete_id: int) -> None:
                 resting_heart_rate=resting_hr,
             )
             activity.training_load = calculate_training_load(metrics)
-        session.commit()
+            if i % _RECALC_BATCH_SIZE == 0:
+                session.commit()
+        session.commit()  # final partial batch
 
 
 @router.patch("", response_model=AthleteResponse)
@@ -81,17 +95,20 @@ async def update_athlete_profile(
     if not athlete:
         raise HTTPException(status_code=404, detail="Athlete profile not found")
 
-    if body.max_heart_rate is not None:
+    hr_changed = False
+    if body.max_heart_rate is not None and body.max_heart_rate != athlete.max_heart_rate:
         athlete.max_heart_rate = body.max_heart_rate
-    if body.resting_heart_rate is not None:
+        hr_changed = True
+    if body.resting_heart_rate is not None and body.resting_heart_rate != athlete.resting_heart_rate:
         athlete.resting_heart_rate = body.resting_heart_rate
+        hr_changed = True
 
-    db.commit()
-    db.refresh(athlete)
-
-    # Re-calculate legacy training loads in the background so the endpoint
-    # returns immediately rather than blocking on potentially many activities.
-    background_tasks.add_task(_recalculate_loads, athlete.strava_athlete_id)
+    if hr_changed:
+        db.commit()
+        db.refresh(athlete)
+        # Re-calculate legacy training loads in the background so the endpoint
+        # returns immediately rather than blocking on potentially many activities.
+        background_tasks.add_task(_recalculate_loads, athlete.strava_athlete_id)
 
     return AthleteResponse.model_validate(athlete)
 
@@ -163,36 +180,34 @@ async def get_performance(
     if start_date > end_date:
         raise HTTPException(status_code=422, detail="start must be before end")
 
-    # Fetch all activities up to end_date so the EWMA is seeded from
-    # the athlete's full history, not just the requested window.
-    all_activities = db.query(
-        Activity.start_date_local,
-        Activity.training_load,
-    ).filter(
-        Activity.strava_athlete_id == athlete.strava_athlete_id,
-        Activity.start_date_local <= datetime.combine(end_date, datetime.max.time()),
-        Activity.training_load.isnot(None),
-    ).all()
+    # Aggregate daily training load in SQL — one row per day across the full
+    # history up to end_date so the EWMA seed reflects all past training.
+    daily_rows = (
+        db.query(
+            func.date(Activity.start_date_local).label("activity_date"),
+            func.sum(Activity.training_load).label("daily_load"),
+        )
+        .filter(
+            Activity.strava_athlete_id == athlete.strava_athlete_id,
+            Activity.start_date_local <= datetime.combine(end_date, datetime.max.time()),
+            Activity.training_load.isnot(None),
+        )
+        .group_by("activity_date")
+        .order_by("activity_date")
+        .all()
+    )
 
-    # Aggregate to daily loads across the full history
-    all_daily: dict[date, float] = {}
-    for row in all_activities:
-        d = row.start_date_local.date()
-        all_daily[d] = all_daily.get(d, 0.0) + (row.training_load or 0.0)
+    # func.date() returns a string in SQLite and a date in PostgreSQL
+    all_daily: dict[date, float] = {
+        (date.fromisoformat(row.activity_date) if isinstance(row.activity_date, str) else row.activity_date): float(row.daily_load or 0.0)
+        for row in daily_rows
+    }
 
-    # Seed CTL/ATL from history prior to the requested window by running
-    # the EWMA from the earliest activity date (or start_date, whichever
-    # comes first) up to the day before start_date.
-    seed_start = min(all_daily.keys(), default=start_date)
+    # Seed CTL/ATL from history prior to the requested window using the
+    # lightweight seed_pmc helper (no full series allocation).
     seed_end = start_date - timedelta(days=1)
-
-    initial_ctl = 0.0
-    initial_atl = 0.0
-    if seed_start <= seed_end:
-        seed_series = calculate_pmc(all_daily, seed_start, seed_end)
-        if seed_series:
-            initial_ctl = seed_series[-1].ctl
-            initial_atl = seed_series[-1].atl
+    seed_loads = {d: v for d, v in all_daily.items() if d <= seed_end}
+    initial_ctl, initial_atl = seed_pmc(seed_loads, seed_end) if seed_loads else (0.0, 0.0)
 
     # Compute the requested window
     window_loads = {d: v for d, v in all_daily.items() if start_date <= d <= end_date}

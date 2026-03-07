@@ -76,6 +76,46 @@ def calculate_pmc(
     return result
 
 
+def seed_pmc(
+    daily_loads: Dict[date, float],
+    up_to: date,
+    initial_ctl: float = 0.0,
+    initial_atl: float = 0.0,
+) -> tuple[float, float]:
+    """Compute only the final CTL/ATL values without materialising the full series.
+
+    Use this to efficiently seed the EWMA from historical data before the
+    requested window, avoiding a large in-memory list allocation.
+
+    Parameters
+    ----------
+    daily_loads:
+        Map of date → total training load. Missing dates = 0 load.
+    up_to:
+        Last date to process (inclusive).
+    initial_ctl, initial_atl:
+        Seed values (default 0).
+
+    Returns
+    -------
+    (ctl, atl) at the end of ``up_to``.
+    """
+    if not daily_loads:
+        return initial_ctl, initial_atl
+
+    ctl = initial_ctl
+    atl = initial_atl
+    current = min(daily_loads.keys())
+
+    while current <= up_to:
+        load = daily_loads.get(current, 0.0)
+        ctl = ctl + (load - ctl) / CTL_DAYS
+        atl = atl + (load - atl) / ATL_DAYS
+        current += timedelta(days=1)
+
+    return ctl, atl
+
+
 def compute_trend(snapshots: List[PMCDay], window: int = 7) -> str:
     """Determine CTL trend over the last `window` days.
 
