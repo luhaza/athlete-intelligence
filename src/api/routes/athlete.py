@@ -44,44 +44,55 @@ async def get_athlete_profile(db: Session = Depends(get_db)):
 _RECALC_BATCH_SIZE = 100
 
 
-def _recalculate_loads(strava_athlete_id: int) -> None:
+def _recalculate_loads_for_session(session: Session, strava_athlete_id: int) -> None:
+    """Recalculate loads for one athlete using the provided DB session."""
+    from src.algorithms.training_load import calculate_training_load, ActivityMetrics
+    from src.config.training_zones import DEFAULT_MAX_HR, DEFAULT_RESTING_HR
+
+    athlete = session.query(Athlete).filter_by(strava_athlete_id=strava_athlete_id).first()
+    if not athlete:
+        return
+
+    max_hr = athlete.max_heart_rate or DEFAULT_MAX_HR
+    resting_hr = athlete.resting_heart_rate or DEFAULT_RESTING_HR
+
+    query = (
+        session.query(Activity)
+        .filter_by(strava_athlete_id=strava_athlete_id)
+        .yield_per(_RECALC_BATCH_SIZE)
+    )
+    for i, activity in enumerate(query, 1):
+        metrics = ActivityMetrics(
+            sport_type=activity.sport_type,
+            moving_time=activity.moving_time,
+            distance=activity.distance or 0.0,
+            average_heartrate=activity.average_heartrate,
+            average_watts=activity.average_watts,
+            total_elevation_gain=activity.total_elevation_gain,
+            max_heartrate=max_hr,
+            resting_heart_rate=resting_hr,
+        )
+        activity.training_load = calculate_training_load(metrics)
+        if i % _RECALC_BATCH_SIZE == 0:
+            session.commit()
+    session.commit()  # final partial batch
+
+
+def _recalculate_loads(strava_athlete_id: int, bind=None) -> None:
     """Re-run training load calculations for all activities after HR config changes.
 
     Processes activities in batches of ``_RECALC_BATCH_SIZE`` and commits after
     each batch so the session never holds the entire history in memory.
     """
     from src.database.session import get_session
-    from src.algorithms.training_load import calculate_training_load, ActivityMetrics
-    from src.config.training_zones import DEFAULT_MAX_HR, DEFAULT_RESTING_HR
 
-    with get_session() as session:
-        athlete = session.query(Athlete).filter_by(strava_athlete_id=strava_athlete_id).first()
-        if not athlete:
-            return
+    if bind is None:
+        with get_session() as session:
+            _recalculate_loads_for_session(session, strava_athlete_id)
+        return
 
-        max_hr = athlete.max_heart_rate or DEFAULT_MAX_HR
-        resting_hr = athlete.resting_heart_rate or DEFAULT_RESTING_HR
-
-        query = (
-            session.query(Activity)
-            .filter_by(strava_athlete_id=strava_athlete_id)
-            .yield_per(_RECALC_BATCH_SIZE)
-        )
-        for i, activity in enumerate(query, 1):
-            metrics = ActivityMetrics(
-                sport_type=activity.sport_type,
-                moving_time=activity.moving_time,
-                distance=activity.distance or 0.0,
-                average_heartrate=activity.average_heartrate,
-                average_watts=activity.average_watts,
-                total_elevation_gain=activity.total_elevation_gain,
-                max_heartrate=max_hr,
-                resting_heart_rate=resting_hr,
-            )
-            activity.training_load = calculate_training_load(metrics)
-            if i % _RECALC_BATCH_SIZE == 0:
-                session.commit()
-        session.commit()  # final partial batch
+    with Session(bind=bind, autoflush=False) as session:
+        _recalculate_loads_for_session(session, strava_athlete_id)
 
 
 @router.patch("", response_model=AthleteResponse)
@@ -108,7 +119,7 @@ async def update_athlete_profile(
         db.refresh(athlete)
         # Re-calculate legacy training loads in the background so the endpoint
         # returns immediately rather than blocking on potentially many activities.
-        background_tasks.add_task(_recalculate_loads, athlete.strava_athlete_id)
+        background_tasks.add_task(_recalculate_loads, athlete.strava_athlete_id, db.get_bind())
 
     return AthleteResponse.model_validate(athlete)
 
