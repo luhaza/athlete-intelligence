@@ -23,6 +23,9 @@ uvicorn src.api.main:app --reload
 
 # Initialize the database
 python -m src.database.init_db
+
+# Run the frontend dev server (port 3000)
+cd frontend && npm install && npm run dev
 ```
 
 ## Environment Setup
