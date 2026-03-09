@@ -18,7 +18,7 @@ function formatDate(dateStr: string): string {
 export default async function ActivityDetailPage({ params }: Props) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  if (!Number.isFinite(id)) notFound();
+  if (!Number.isInteger(id) || id <= 0) notFound();
   const [activity, laps] = await Promise.all([
     getActivity(id),
     getActivityLaps(id).catch(() => []),

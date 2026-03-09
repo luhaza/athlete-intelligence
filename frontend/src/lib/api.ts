@@ -11,10 +11,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: API_KEY ? { "X-API-Key": API_KEY } : {},
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: API_KEY ? { "X-API-Key": API_KEY } : {},
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(`API unreachable: ${path}`);
+  }
   if (!res.ok) {
     throw new Error(`API error ${res.status}: ${path}`);
   }
@@ -29,7 +34,8 @@ export function getPerformance(days = 90): Promise<PerformanceResponse> {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - days);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return apiFetch<PerformanceResponse>(
     `/athlete/performance?start=${fmt(start)}&end=${fmt(end)}`
   );

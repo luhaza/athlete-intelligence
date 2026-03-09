@@ -10,7 +10,7 @@ export default function GlobalError({
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
       <p className="text-gray-500 text-sm">
-        {error.message.startsWith("API error")
+        {error.message.startsWith("API error") || error.message.startsWith("API unreachable")
           ? "Could not reach the API. Is the backend running?"
           : "Something went wrong."}
       </p>
