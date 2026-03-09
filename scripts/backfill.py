@@ -12,14 +12,17 @@ Options
     Useful for incremental re-runs (e.g. ``--after 1700000000``).
 --before TIMESTAMP
     Only sync activities that started before this Unix timestamp.
+--sport-type TYPE
+    Only sync activities of this sport type (e.g. ``Run``, ``Ride``).
+    Defaults to ``Run``.  Pass an empty string to sync all sport types.
 --max N
     Stop after syncing N activities (useful for testing).
 --dry-run
     Fetch the activity list but skip all DB writes and load calculation.
 --delay SECONDS
-    Pause between individual activity fetches (default: 0.5s).
+    Pause between individual activity fetches (default: 30s).
     Strava's rate limit is 100 requests / 15 min and 1 000 / day.
-    At 0.5s delay, 3 API calls per activity => ~40 activities/min.
+    Each activity requires ~4 API calls, so 30s keeps well within limits.
 """
 
 import argparse
@@ -35,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.config import get_database_url  # noqa: F401 (side-effect: loads .env)
 
 from src.strava.client import StravaClient
-from src.database.models import Base
+from src.database.models import Base, Activity
 from src.database.session import get_session, get_engine
 from src.sync.pipeline import sync_activity
 
@@ -62,6 +65,10 @@ def main() -> None:
         help="Only sync activities before this Unix timestamp.",
     )
     parser.add_argument(
+        "--sport-type", type=str, default="Run", metavar="TYPE",
+        help="Only sync activities of this sport type (default: Run). Pass '' for all.",
+    )
+    parser.add_argument(
         "--max", type=int, default=None, dest="max_activities", metavar="N",
         help="Stop after syncing N activities.",
     )
@@ -70,8 +77,8 @@ def main() -> None:
         help="List activities without writing to the database.",
     )
     parser.add_argument(
-        "--delay", type=float, default=0.5, metavar="SECONDS",
-        help="Pause between individual activity syncs (default: 0.5s).",
+        "--delay", type=float, default=30.0, metavar="SECONDS",
+        help="Pause between individual activity syncs (default: 30s).",
     )
     args = parser.parse_args()
 
@@ -85,9 +92,10 @@ def main() -> None:
     total_errors = 0
     page = 1
 
+    sport_filter = args.sport_type.strip() if args.sport_type else ""
     logger.info(
-        "Starting backfill — after=%s before=%s max=%s dry_run=%s",
-        args.after, args.before, args.max_activities, args.dry_run,
+        "Starting backfill — after=%s before=%s sport_type=%r max=%s dry_run=%s",
+        args.after, args.before, sport_filter or "all", args.max_activities, args.dry_run,
     )
 
     while True:
@@ -106,13 +114,24 @@ def main() -> None:
         logger.info("Page %d: %d activities", page, len(activities))
 
         for act in activities:
+            sport = act.get("sport_type") or act.get("type", "Unknown")
+            if sport_filter and sport != sport_filter:
+                continue
             activity_id = act["id"]
             name = act.get("name", "Unknown")
-            sport = act.get("sport_type") or act.get("type", "Unknown")
             date = (act.get("start_date_local") or "")[:10]
 
+            with get_session() as session:
+                exists = session.query(Activity).filter(
+                    Activity.strava_activity_id == activity_id
+                ).first() is not None
+
+            if exists:
+                logger.debug("Skipping already-synced activity %s (%s)", activity_id, name)
+                continue
+
             if args.dry_run:
-                print(f"  [dry-run] {date}  {sport:<14s}  {name}  (id={activity_id})")
+                print(f"  [dry-run] {date}  {sport_filter or sport:<14s}  {name}  (id={activity_id})")
                 total_synced += 1
             else:
                 try:
@@ -130,7 +149,8 @@ def main() -> None:
             if args.max_activities and total_synced >= args.max_activities:
                 break
 
-            time.sleep(args.delay)
+            if not exists:
+                time.sleep(args.delay)
 
         if args.max_activities and total_synced >= args.max_activities:
             logger.info("Reached --max limit (%d).", args.max_activities)
