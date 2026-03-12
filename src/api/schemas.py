@@ -49,7 +49,10 @@ class ActivitySummary(BaseModel):
     
     # Elevation
     total_elevation_gain: Optional[float] = None
-    
+
+    # Training load
+    training_load: Optional[float] = None
+
     # Computed fields
     @computed_field
     @property
@@ -123,9 +126,6 @@ class ActivityDetail(ActivitySummary):
     commute: bool = False
     manual: bool = False
     private: bool = False
-    
-    # Derived metrics
-    training_load: Optional[float] = None
     
     @computed_field
     @property

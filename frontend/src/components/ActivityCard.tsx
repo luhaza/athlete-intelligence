@@ -57,6 +57,12 @@ export default function ActivityCard({ activity: a }: ActivityCardProps) {
               <p className="text-xs text-gray-400">bpm</p>
             </div>
           )}
+          {a.training_load != null && (
+            <div className="text-right">
+              <p className="font-medium">{a.training_load.toFixed(0)}</p>
+              <p className="text-xs text-gray-400">load</p>
+            </div>
+          )}
         </div>
       </div>
     </Link>

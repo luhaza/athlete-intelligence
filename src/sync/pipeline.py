@@ -387,7 +387,7 @@ def _calculate_load(
         moving_time=activity.moving_time or 0,
         sport_type=activity.sport_type or "Unknown",
         average_heartrate=activity.average_heartrate,
-        max_heartrate=activity.max_heartrate,
+        max_heartrate=athlete.max_heart_rate if athlete else None,
         resting_heart_rate=athlete.resting_heart_rate if athlete else None,
         distance=activity.distance or 0.0,
         total_elevation_gain=activity.total_elevation_gain,

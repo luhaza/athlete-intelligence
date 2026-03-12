@@ -26,6 +26,7 @@ export interface ActivitySummary {
   average_cadence: number | null;
   average_watts: number | null;
   total_elevation_gain: number | null;
+  training_load: number | null;
   // computed fields
   distance_miles: number;
   distance_km: number;
@@ -51,7 +52,6 @@ export interface ActivityDetail extends ActivitySummary {
   commute: boolean;
   manual: boolean;
   private: boolean;
-  training_load: number | null;
   elevation_gain_feet: number | null;
 }
 
